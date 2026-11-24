@@ -19,7 +19,7 @@ import {
   api,
 } from '../lib/api.js';
 import { browserLogin } from '../lib/oauth.js';
-import { operations, catalog, validate, execute, hours, requireWriteAccess } from '../lib/operations.js';
+import { operations, catalog, validate, execute, hours, requireTimeWriteAccess } from '../lib/operations.js';
 import { pickTask, display } from '../lib/task-picker.js';
 
 const argv = process.argv.slice(2);
@@ -97,6 +97,14 @@ function commandUsage(op) {
     const flag = `--${flagFor(key)} <value>`;
     arguments_.push(op.name === 'log_time' && key === 'task_id' ? `[${flag}]` : flag);
   }
+  for (const rule of op.inputSchema.allOf ?? []) {
+    const keys = rule.not?.required ?? rule.oneOf.map((branch) => branch.required[0]);
+    const options = keys.map((k) => op.positional.includes(k) ? `<${k}>` : `--${flagFor(k)} <value>`);
+    const group = rule.oneOf ? `(${options.join(' | ')})` : `[${options.join(' | ')}]`;
+    const position = op.positional.indexOf(keys[0]);
+    if (position < 0) arguments_.push(group);
+    else arguments_[position] = group;
+  }
   return [op.command, ...arguments_].join(' ');
 }
 const wordmark = [
@@ -140,6 +148,7 @@ function helpFor(op) {
   return [
     `tick ${commandUsage(op)}`,
     op.description,
+    ...(op.inputSchema.dependentRequired ? ['--client and --client-id qualify --project.'] : []),
     ...(op.name === 'log_time' ? ['Omit --task-id in a terminal to choose a task. Scripts and --json require a task ID.'] : []),
     '',
     ...Object.entries(op.inputSchema.properties).map(
@@ -203,7 +212,9 @@ async function login(args) {
     usage('--no-browser and --allow-writes apply to browser login.');
   if (!legacy) {
     await printWordmark(process.stderr, true);
-    const account = await browserLogin(base, { noBrowser: v['no-browser'], allowWrites: v['allow-writes'] });
+    const account = await browserLogin(base, {
+      noBrowser: v['no-browser'], allowWrites: v['allow-writes'],
+    });
     await saveAccount(account);
     return show({
       signed_in: true,
@@ -300,14 +311,22 @@ async function main() {
   } else {
     const group = operations.filter((op) => op.command.split(' ')[0] === first);
     if (!group.length) usage('Unknown command. Run tick --help.');
-    op = group.find((op) => op.command === first || op.command === first + ' ' + rest[0]);
+    let verb = rest[0];
+    if (group.some((op) => op.writeKind === 'account')) {
+      if (verb === 'add') verb = 'create';
+      if (verb === 'edit') verb = 'update';
+    }
+    op = group.find((op) => op.command === first || op.command === first + ' ' + verb);
     if (!op) {
       if (!rest.length || ['--help', '-h'].includes(rest[0])) return console.log(usageText(group));
       usage(`Unknown subcommand. Run tick ${first} --help.`);
     }
     const props = op.inputSchema.properties;
     const opts = { ...globalOptions };
-    for (const k of Object.keys(props)) opts[flagFor(k)] = { type: 'string' };
+    for (const key of Object.keys(props)) {
+      const selector = op.writeKind === 'account' && (key.endsWith('_id') || Object.hasOwn(props, key + '_id'));
+      opts[flagFor(key)] = { type: 'string', multiple: selector };
+    }
     const parsed = parse(op.command === first ? rest : rest.slice(1), opts);
     if (parsed.values.help) return console.log(helpFor(op));
     if (parsed.positionals.length > op.positional.length)
@@ -316,13 +335,19 @@ async function main() {
     for (const [name, p] of Object.entries(props)) {
       const i = op.positional.indexOf(name);
       const arg = i < 0 ? undefined : parsed.positionals[i];
-      const flag = parsed.values[flagFor(name)];
+      const option = parsed.values[flagFor(name)];
+      if (Array.isArray(option) && option.length > 1) usage(`Specify ${name} once.`);
+      const flag = Array.isArray(option) ? option[0] : option;
       if (arg !== undefined && flag !== undefined) usage(`Specify ${name} once.`);
       const value = flag ?? arg;
       if (value === undefined) continue;
       if (p.type === 'boolean' && !['true', 'false'].includes(value)) usage(`${name} must be true or false.`);
-      inputs[name] =
-        p.type === 'integer' ? positiveId(value, name) : p.type === 'boolean' ? value === 'true' : value;
+      if (p.type === 'number') {
+        if (!/^\d+(?:\.\d+)?$/.test(value)) usage(`${name} must be a nonnegative decimal number.`);
+        inputs[name] = Number(value);
+      } else if (p.type === 'integer') inputs[name] = positiveId(value, name);
+      else if (p.type === 'boolean') inputs[name] = value === 'true';
+      else inputs[name] = value;
     }
     dryRun = Boolean(parsed.values['dry-run']);
   }
@@ -337,7 +362,7 @@ async function main() {
   }
   const account = await accountForCall(process.env.TICK_EXPECTED_SESSION);
   if (interactiveLog) {
-    if (!dryRun) requireWriteAccess(account);
+    if (!dryRun) requireTimeWriteAccess(account);
     inputs.task_id = await pickTask(account);
     if (inputs.task_id === null) {
       process.stderr.write('Cancelled.\n');

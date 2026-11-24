@@ -1,11 +1,15 @@
 ---
 name: tick
-description: Use Tick time tracking to review a timesheet, find project or task budgets, record time, or manage a timer with the Tick CLI.
+description: Use Tick time tracking to review a timesheet, find project or task budgets, record time, manage a timer, or administer a subscription with the Tick CLI.
 ---
 
 # Tick time tracking
 
-Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Browser login grants read access by default. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. Restart the MCP server after a new login. Keep credentials out of the conversation.
+Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Account owners and administrators can create and edit users, clients, projects, and tasks after signing in. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. Restart the MCP server after a new login. Keep credentials out of the conversation.
+
+## Manage a subscription
+
+Use the `create_user`, `update_user`, `create_client`, `update_client`, `create_project`, `update_project`, `create_task` and `update_task` schemas in `tick tools --json`. Client and project updates accept a target ID or exact name. Use `client` or `owner` on projects, or `project` on tasks. Qualify an ambiguous project name with `client` or `client_id`. On a named project update the client qualifies the target. To move the project, supply its ID. An owner can be `me`, an email address, or a full name. Named previews read from Tick to resolve the IDs. User creation sends an invitation. Project creation assigns all users in the subscription. Preview either with `--dry-run` when the user requests a draft.
 
 ## Review a week or budget
 

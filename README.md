@@ -1,6 +1,6 @@
 # Tick CLI
 
-Use `tick` to review a timesheet, find a client or task, check a budget, record time, or manage a timer. Each operation has a terminal command and a JSON interface for agents. The client talks directly to the [Tick API v2](https://github.com/tick/tick-api).
+Use `tick` to review a timesheet, find a client or task, check a budget, record time, manage a timer, or administer a subscription. Each operation has a terminal command and a JSON interface for agents. The client talks directly to the [Tick API v2](https://github.com/tick/tick-api).
 
 ## Install
 
@@ -21,7 +21,7 @@ tick account
 
 Browser login requires a Tick server with the OAuth provider deployed. On an older server, use the existing API token login described below.
 
-Tick opens your browser. Choose your subscription and approve read access. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission.
+Tick opens your browser. Choose the subscription you want to connect. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission. If you own or administer the selected subscription, you can create and edit users, clients, projects, and tasks as soon as you sign in. Tick checks your current role on each request.
 
 If the browser does not open, follow the URL printed in the terminal. Use `tick login --no-browser` to skip the automatic launch. Open the link on the same computer as the CLI. Over SSH, forward the loopback port shown in the link’s `redirect_uri` to the same port on the remote host.
 
@@ -64,7 +64,30 @@ Check the project and task IDs before posting, especially when names repeat. A t
 | `tick timers list`, `tick timers get ID`, `tick timers start [TASK_ID]`, `tick timers update ID` | Inspect timers, start a new timer, or change its task and notes. |
 | `tick timers pause ID`, `tick timers resume ID`, `tick timers save ID` | Pause, resume or turn a timer into a time entry. |
 
-Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A preview with an explicit task ID runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
+Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A `tick log` preview with an explicit `--task-id` runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
+
+### Manage a subscription
+
+```sh
+tick users create --first-name Jo --last-name Park --email jo@example.com --dry-run
+tick users update 8 --billable-rate 85.50
+tick clients create --name "Acme"
+tick clients update 3 --name "Acme Studio"
+tick projects add --client Acme --owner me --name "Launch" --budget 40
+tick projects update 16 --billable false
+tick tasks add --project Launch --client Acme --name "Design"
+tick tasks update 24 --budget 12
+```
+
+Management commands match client and project names exactly, ignoring case, including closed records. Use `--owner me`, a full name, or an email address for the project owner. You can also use numeric IDs with `--client-id`, `--owner-id`, and `--project-id`. Supply one selector per resource. If several projects share a name, add `--client` or `--client-id`. If several owners share a name, use their email or ID. A missing or ambiguous match stops the command before it writes.
+
+To rename a client, run `tick clients edit --client Acme --name "Acme Studio"`. To rename a project, run `tick projects edit --project Launch --client Acme --name Website`. Here the client identifies the project. To move the project, use its ID as the target, for example `tick projects edit 16 --client "Acme Studio"`. Named dry runs read from Tick and show the resolved IDs. Management previews with IDs alone run offline. JSON tools accept the same selectors as `client`, `owner`, and `project`.
+
+In terminal commands for users, clients, projects, and tasks, `add` is an alias for `create`, and `edit` is an alias for `update`.
+
+Creating a user sends an email invitation. Inviting someone who already uses Tick preserves their existing profile. Administrators can change a member's role and hourly rate for the selected subscription. They can also change the first name, last name and time zone of a person who belongs only to that subscription. Login email and password changes belong to the user. The subscription owner keeps the administrator role.
+
+Creating a project assigns all users in the subscription. Use `--help` on any create or update command to see its supported fields. Updates send only the fields you supply.
 
 ### Reports and budgets
 

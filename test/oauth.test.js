@@ -18,7 +18,7 @@ async function fixture(t) {
     access,
     refreshToken;
   const grants = new Map();
-  const state = { grants, rotations: 0, writes: 0, rejectRevoke: false };
+  const state = { grants, rotations: 0, writes: 0, admin: true, rejectRevoke: false };
   const server = createServer(async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -81,6 +81,19 @@ async function fixture(t) {
       });
     if (req.url === '/41/api/v2/me.json') return reply(200, { id: 8, first_name: 'Lee' });
     if (req.url === '/41/api/v2/users.json') return reply(200, [{ id: 9 }, { id: 8, first_name: 'Lee' }]);
+    if (req.url === '/41/api/v2/management/lookup.json?kind=client&name=Studio' && req.method === 'GET') {
+      state.lookups = (state.lookups || 0) + 1;
+      return reply(200, [{ id: 3, name: 'Studio' }]);
+    }
+    if (req.url === '/41/api/v2/clients.json' && req.method === 'POST') {
+      state.writes++;
+      if (!state.admin) return reply(403, {});
+      return reply(201, { id: 3, name: JSON.parse(body).client.name });
+    }
+    if (req.url === '/41/api/v2/clients/3.json' && req.method === 'PUT') {
+      state.writes++;
+      return reply(200, { id: 3, name: JSON.parse(body).client.name });
+    }
     if (req.url === '/41/api/v2/timers/1/pause.json' && req.method === 'PUT') {
       state.writes++;
       return reply(401, {});
@@ -236,7 +249,7 @@ test(
   }
 );
 
-test('switching to read-only and then legacy credentials revokes both previous connections', async (t) => {
+test('switching off time writes and then using legacy credentials revokes both previous connections', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.login(['--allow-writes'])).code, 0);
   const old = JSON.parse(await readFile(f.profile));
@@ -301,4 +314,37 @@ test('replacement preserves a malformed or unreadable profile and reports how to
   assert.match(unreadable.stderr, /Check its file type and permissions/);
   assert.ok((await stat(f.profile)).isDirectory());
   assert.equal(f.state.grants.size, 1);
+});
+
+test('account changes follow the current role on the same browser login', async (t) => {
+  const f = await fixture(t);
+  const create = ['clients', 'create', '--name', 'Studio'];
+  const login = await f.login();
+  assert.equal(login.code, 0, login.stderr);
+  assert.equal(JSON.parse(login.stdout).scope, 'read');
+  let client = await f.run(create);
+  assert.equal(client.code, 0, client.stderr);
+  f.state.admin = false;
+  client = await f.run(create);
+  assert.equal(client.code, 1);
+  const error = JSON.parse(client.stderr).error;
+  assert.equal(error.status, 403);
+  assert.match(error.message, /role/);
+  assert.doesNotMatch(error.message, /login/);
+  assert.equal(f.state.writes, 2);
+});
+
+test('a named account edit can be previewed and submitted after normal login', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.login([])).code, 0);
+  const edit = ['clients', 'edit', '--client', 'Studio', '--name', 'Agency'];
+  const preview = await f.run([...edit, '--dry-run']);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.equal(JSON.parse(preview.stdout).path, '/41/api/v2/clients/3.json');
+  assert.equal(f.state.writes, 0);
+  const result = await f.run(edit);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { id: 3, name: 'Agency' });
+  assert.equal(f.state.lookups, 2);
+  assert.equal(f.state.writes, 1);
 });
