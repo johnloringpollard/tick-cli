@@ -11,9 +11,9 @@ const tty = 'data:text/javascript,' + encodeURIComponent(
   'for (const stream of [process.stdin, process.stdout, process.stderr]) stream.isTTY = true;'
 );
 
-async function fixture(t, { oldServer = false } = {}) {
+async function fixture(t, { oldServer = false, taskCount = 102 } = {}) {
   const calls = [];
-  const tasks = Array.from({ length: 102 }, (_, i) => ({
+  const tasks = Array.from({ length: taskCount }, (_, i) => ({
     id: i + 1, name: 'Review', client_name: 'Acme', project_name: 'Beta',
   }));
   const server = createServer(async (req, res) => {
@@ -62,7 +62,7 @@ async function fixture(t, { oldServer = false } = {}) {
 
 test('interactive log searches assigned pages, disambiguates duplicate tasks, and posts the selected ID', async t => {
   const { calls, run } = await fixture(t);
-  const { code, stderr } = await run(['log', '45m', '--notes', 'Check'], '99\nrEvIeW\n' + '/more\n'.repeat(7) + '2\n');
+  const { code, stderr } = await run(['log', '45m', '--notes', 'Check'], '99\nrVIeW' + '\x1b[D'.repeat(4) + 'e\n' + '/more\n'.repeat(7) + '2\n');
   assert.equal(code, 0, stderr);
   assert.match(stderr, /1\. A  B \/ Alpha \/ Track \(#2\)/);
   assert.doesNotMatch(stderr, /Closed/);
@@ -76,9 +76,9 @@ test('interactive log searches assigned pages, disambiguates duplicate tasks, an
   ]);
 });
 
-test('blank input, EOF, and interactive dry-run leave entries untouched', async t => {
+test('Enter, EOF, Ctrl-D, Ctrl-C, and interactive dry-run leave entries untouched', async t => {
   const { calls, run } = await fixture(t);
-  for (const answer of ['\n', '']) {
+  for (const answer of ['\n', '', '\x04', '\x03']) {
     const result = await run(['log', '45m'], answer);
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stderr, /Cancelled/);
@@ -112,4 +112,13 @@ test('older servers preserve the recent menu after a search', async t => {
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stderr, /tick tasks search <name>/);
   assert.deepEqual(calls.filter(call => call.method === 'POST').map(call => call.body.entry.task_id), [2]);
+});
+
+test('an empty continuation preserves the last numbered choices', async t => {
+  const { calls, run } = await fixture(t, { taskCount: 100 });
+  const result = await run(['log', '45m'], 'review\n' + '/more\n'.repeat(7) + '10\n');
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stderr, /No more results\./);
+  assert.doesNotMatch(result.stderr, /No tasks found/);
+  assert.deepEqual(calls.filter(call => call.method === 'POST').map(call => call.body.entry.task_id), [100]);
 });
