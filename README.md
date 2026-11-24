@@ -73,11 +73,15 @@ tick users create --first-name Jo --last-name Park --email jo@example.com --dry-
 tick users update 8 --billable-rate 85.50
 tick clients create --name "Acme"
 tick clients update 3 --name "Acme Studio"
-tick projects create --client-id 3 --owner-id 8 --name "Launch" --budget 40
+tick projects add --client Acme --owner me --name "Launch" --budget 40
 tick projects update 16 --billable false
-tick tasks create --project-id 16 --name "Design"
+tick tasks add --project Launch --client Acme --name "Design"
 tick tasks update 24 --budget 12
 ```
+
+Management commands match client and project names exactly, ignoring case, including closed records. Use `--owner me`, a full name, or an email address for the project owner. You can also use numeric IDs with `--client-id`, `--owner-id`, and `--project-id`. Supply one selector per resource. If several projects share a name, add `--client` or `--client-id`. If several owners share a name, use their email or ID. A missing or ambiguous match stops the command before it writes.
+
+To rename a client, run `tick clients edit --client Acme --name "Acme Studio"`. To rename a project, run `tick projects edit --project Launch --client Acme --name Website`. Here the client identifies the project. To move the project, use its ID as the target, for example `tick projects edit 16 --client "Acme Studio"`. Named dry runs read from Tick and show the resolved IDs. Management previews with IDs alone run offline. JSON tools accept the same selectors as `client`, `owner`, and `project`.
 
 In terminal commands for users, clients, projects, and tasks, `add` is an alias for `create`, and `edit` is an alias for `update`.
 

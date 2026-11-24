@@ -9,7 +9,7 @@ Use `tick tools --json` to discover the installed operations and input schemas. 
 
 ## Manage a subscription
 
-Use the `create_user`, `update_user`, `create_client`, `update_client`, `create_project`, `update_project`, `create_task` and `update_task` schemas in `tick tools --json`. Updates take the resource ID and the fields to change. User creation sends an invitation. Project creation assigns all users in the subscription. Preview either with `--dry-run` when the user requests a draft.
+Use the `create_user`, `update_user`, `create_client`, `update_client`, `create_project`, `update_project`, `create_task` and `update_task` schemas in `tick tools --json`. Client and project updates accept a target ID or exact name. Use `client` or `owner` on projects, or `project` on tasks. Qualify an ambiguous project name with `client` or `client_id`. On a named project update the client qualifies the target. To move the project, supply its ID. An owner can be `me`, an email address, or a full name. Named previews read from Tick to resolve the IDs. User creation sends an invitation. Project creation assigns all users in the subscription. Preview either with `--dry-run` when the user requests a draft.
 
 ## Review a week or budget
 

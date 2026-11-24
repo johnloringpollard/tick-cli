@@ -81,6 +81,10 @@ async function fixture(t) {
       });
     if (req.url === '/41/api/v2/me.json') return reply(200, { id: 8, first_name: 'Lee' });
     if (req.url === '/41/api/v2/users.json') return reply(200, [{ id: 9 }, { id: 8, first_name: 'Lee' }]);
+    if (req.url === '/41/api/v2/management/lookup.json?kind=client&name=Studio' && req.method === 'GET') {
+      state.lookups = (state.lookups || 0) + 1;
+      return reply(200, [{ id: 3, name: 'Studio' }]);
+    }
     if (req.url === '/41/api/v2/clients.json' && req.method === 'POST') {
       state.writes++;
       return reply(201, { id: 3, name: JSON.parse(body).client.name });
@@ -327,4 +331,16 @@ test('browser account changes and time changes request and enforce independent s
   assert.equal(f.state.writes, 4);
   const legacy = await f.run(['login', '--allow-admin', '--subscription-id', '41']);
   assert.equal(JSON.parse(legacy.stderr).error.code, 'invalid_input');
+});
+
+test('a read grant previews a named admin edit and blocks a real edit before lookup', async (t) => {
+  const f = await fixture(t);
+  assert.equal((await f.login([])).code, 0);
+  const edit = ['clients', 'edit', '--client', 'Studio', '--name', 'Agency'];
+  const preview = await f.run([...edit, '--dry-run']);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.equal(JSON.parse(preview.stdout).path, '/41/api/v2/clients/3.json');
+  assert.equal(JSON.parse((await f.run(edit)).stderr).error.code, 'insufficient_scope');
+  assert.equal(f.state.lookups, 1);
+  assert.equal(f.state.writes, 0);
 });

@@ -34,6 +34,11 @@ async function fixture(t) {
   let me = { id: 7, first_name: 'Ana', last_name: 'Reed' };
   let redirect = false;
   let failure;
+  const candidates = {
+    client: [{ id: 3, name: 'Acme' }],
+    owner: [{ id: 7, name: 'Ana Reed', email: 'ana@local.test' }],
+    project: [{ id: 5, name: 'Launch', client_id: 3, client_name: 'Acme' }],
+  };
   let beforeSave = async () => {};
   const server = createServer(async (req, res) => {
     const u = new URL(req.url, 'http://localhost');
@@ -65,6 +70,14 @@ async function fixture(t) {
     if (path === 'me') return reply(me === undefined ? 404 : 200, me);
     if (/^(users|clients|projects|tasks)(\/\d+)?$/.test(path) && ['POST', 'PUT'].includes(req.method))
       return reply(req.method === 'POST' ? 201 : 200, { id: 12, ...Object.values(body)[0] });
+    if (path === 'management/lookup') {
+      const { kind, name, client_id } = Object.fromEntries(u.searchParams);
+      const matches = candidates[kind].filter((item) =>
+        (item.name.toLowerCase() === name.toLowerCase() ||
+          (kind === 'owner' && (item.email === name || (name === 'me' && item.id === me.id)))) &&
+        (!client_id || item.client_id === Number(client_id)));
+      return reply(200, matches);
+    }
     if (path === 'users') return reply(200, users);
     if (['tasks', 'tasks/recent'].includes(path)) {
       const uid = u.searchParams.get('user_id');
@@ -140,6 +153,7 @@ async function fixture(t) {
   return {
     dir,
     calls,
+    candidates,
     entries,
     tasks,
     users,
@@ -511,4 +525,64 @@ test('hourly rates must fit the subscription billable rate in cents', async (t) 
   assert.equal(preview.body.user.billable_rate, 21474836.47);
   assert.equal(bad(await f.call('update_user', { user_id: 12, billable_rate: 21474836.48 })).code, 'invalid_input');
   assert.equal(f.calls.length, 0);
+});
+
+test('named selectors resolve to scoped IDs on terminal and JSON commands', async (t) => {
+  const f = await fixture(t);
+  const create = ok(await f.invoke('projects', 'add', '--name', 'Launch', '--client', 'ACME', '--owner', 'me', '--dry-run'));
+  assert.deepEqual(create.body, { project: { client_id: 3, owner_id: 7, name: 'Launch' } });
+  assert.deepEqual(f.calls.map((c) => [c.method, c.query]), [
+    ['GET', { kind: 'client', name: 'ACME' }], ['GET', { kind: 'owner', name: 'me' }],
+  ]);
+  ok(await f.call('update_project', { project: 'Launch', client: 'Acme', owner: 'ana@local.test', name: 'Website' }));
+  assert.deepEqual(f.calls.slice(-3).map((c) => c.query), [
+    { kind: 'project', name: 'Launch', client_id: '3' }, { kind: 'owner', name: 'ana@local.test' }, {},
+  ]);
+  assert.deepEqual(f.calls.at(-1), {
+    method: 'PUT', path: '/42/api/v2/projects/5.json', query: {}, body: { project: { owner_id: 7, name: 'Website' } },
+  });
+  ok(await f.call('update_project', { project_id: 5, client: 'Acme' }));
+  assert.deepEqual(f.calls.at(-1).body, { project: { client_id: 3 } });
+  ok(await f.invoke('clients', 'edit', '--client', 'Acme', '--name', 'New'));
+  assert.equal(f.calls.at(-1).path, '/42/api/v2/clients/3.json');
+  f.candidates.project.push({ id: 6, name: 'Launch', client_id: 4, client_name: 'Beta' });
+  ok(await f.call('create_task', { name: 'Test', project: 'Launch', client_id: 4 }));
+  assert.deepEqual(f.calls.at(-1).body, { task: { name: 'Test', project_id: 6 } });
+  ok(await f.invoke('tasks', 'edit', '9', '--project', 'Launch', '--client', 'Acme'));
+  assert.deepEqual(f.calls.at(-1).body, { task: { project_id: 5 } });
+});
+
+test('ambiguous, missing or invalid matches and failed lookups stop before a write', async (t) => {
+  const f = await fixture(t);
+  f.candidates.project.push({ id: 6, name: 'Launch', client_id: 4, client_name: 'Beta' });
+  const conflict = bad(await f.invoke('tasks', 'add', '--name', 'Review', '--project', 'Launch'));
+  assert.equal(conflict.code, 'ambiguous_match');
+  assert.match(conflict.message, /Acme #3.*Beta #4.*--client/);
+  f.candidates.owner.push({ id: 8, name: 'Ana Reed', email: 'other@local.test' });
+  const owner = bad(await f.call('update_project', { project_id: 5, owner: 'Ana Reed' }));
+  assert.match(owner.message, /ana@local.test.*7.*other@local.test.*8.*--owner-id/);
+  assert.equal(bad(await f.call('update_client', { client: 'Missing', name: 'New' })).code, 'not_found');
+  f.candidates.client.push({ id: 0, name: 'Bad' });
+  assert.equal(bad(await f.call('update_client', { client: 'Bad', name: 'New' })).code, 'invalid_response');
+  f.fail(403);
+  assert.equal(bad(await f.call('update_client', { client: 'Acme', name: 'New' })).status, 403);
+  assert.ok(f.calls.every((c) => c.method === 'GET'));
+});
+
+test('conflicting selectors and qualifiers fail before lookup; named previews bind the signed-in user', async (t) => {
+  const f = await fixture(t);
+  for (const [tool, args] of [
+    ['create_project', { name: 'X', client: 'Acme', client_id: 3, owner: 'me' }],
+    ['create_project', { name: 'X', client: 'Acme', owner: 'me', owner_id: 7 }],
+    ['create_task', { name: 'X', project: 'Launch', project_id: 5 }],
+    ['update_project', { project_id: 5, project: 'Launch', name: 'New' }],
+    ['update_project', { project: 'Launch', client: 'Acme' }],
+    ['update_task', { task_id: 9, project_id: 5, client: 'Acme' }],
+    ['update_task', { task_id: 9, client_id: 3, name: 'New' }],
+  ]) assert.equal(bad(await f.call(tool, args)).code, 'invalid_input');
+  assert.equal(f.calls.length, 0);
+  f.env.TICK_USER_ID = '99';
+  const result = await f.invoke('clients', 'edit', '--client', 'Acme', '--name', 'New', '--dry-run');
+  assert.equal(bad(result).code, 'configuration');
+  assert.deepEqual(f.calls.map((c) => c.path), ['/42/api/v2/me.json']);
 });

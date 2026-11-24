@@ -95,6 +95,14 @@ function commandUsage(op) {
     const flag = `--${flagFor(key)} <value>`;
     arguments_.push(op.name === 'log_time' && key === 'task_id' ? `[${flag}]` : flag);
   }
+  for (const rule of op.inputSchema.allOf ?? []) {
+    const keys = rule.not?.required ?? rule.oneOf.map((branch) => branch.required[0]);
+    const options = keys.map((k) => op.positional.includes(k) ? `<${k}>` : `--${flagFor(k)} <value>`);
+    const group = rule.oneOf ? `(${options.join(' | ')})` : `[${options.join(' | ')}]`;
+    const position = op.positional.indexOf(keys[0]);
+    if (position < 0) arguments_.push(group);
+    else arguments_[position] = group;
+  }
   return [op.command, ...arguments_].join(' ');
 }
 const wordmark = [
@@ -138,6 +146,7 @@ function helpFor(op) {
   return [
     `tick ${commandUsage(op)}`,
     op.description,
+    ...(op.inputSchema.dependentRequired ? ['--client and --client-id qualify --project.'] : []),
     ...(op.name === 'log_time' ? ['Omit --task-id in a terminal to choose a task. Scripts and --json require a task ID.'] : []),
     '',
     ...Object.entries(op.inputSchema.properties).map(
