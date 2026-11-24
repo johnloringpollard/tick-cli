@@ -108,7 +108,7 @@ printf '%s\n' '{"task_id":24,"duration":"45m","notes":"Planning"}' | tick call l
 
 `tick session --json` returns an opaque local account binding. An integration can pass it in `TICK_EXPECTED_SESSION` on subsequent calls. Browser credentials keep the same binding through automatic renewal. A new browser login, changed legacy token, account switch, or removed profile returns `session_changed` before any Tick API request. Restart the integration to select the current account.
 
-Use the [Tick MCP server](https://github.com/tick/tick-mcp) in a compatible assistant. The CLI also includes a portable [Tick skill](skills/tick/SKILL.md).
+To connect an MCP-compatible assistant, add `https://www.tickspot.com/mcp` as a remote server and authorize the assistant in your browser. Tick hosts the server. You can use it without installing the CLI. The CLI also includes a portable [Tick skill](skills/tick/SKILL.md).
 
 ## Development
 
