@@ -15,10 +15,12 @@ import {
   origin,
   positiveId,
   request,
+  identity,
   api,
 } from '../lib/api.js';
 import { browserLogin } from '../lib/oauth.js';
-import { operations, catalog, validate, execute } from '../lib/operations.js';
+import { operations, catalog, validate, execute, hours, requireWriteAccess } from '../lib/operations.js';
+import { pickTask, display } from '../lib/task-picker.js';
 
 const argv = process.argv.slice(2);
 const json = argv.includes('--json') || argv[0] === 'call';
@@ -27,7 +29,6 @@ const globalOptions = {
   'dry-run': { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
 };
-const display = (value) => String(value ?? '').replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
 function show(value) {
   if (json) return console.log(JSON.stringify(value));
   if (value && Array.isArray(value.days) && Array.isArray(value.entries)) {
@@ -88,10 +89,12 @@ function parse(args, options) {
 }
 const flagFor = (k) => k.replaceAll('_', '-');
 function commandUsage(op) {
-  const props = op.inputSchema.properties;
   const arguments_ = [...op.positional.map((key) => `<${key}>`)];
-  for (const key of op.inputSchema.required)
-    if (!op.positional.includes(key)) arguments_.push(`--${flagFor(key)} <value>`);
+  for (const key of op.inputSchema.required) {
+    if (op.positional.includes(key)) continue;
+    const flag = `--${flagFor(key)} <value>`;
+    arguments_.push(op.name === 'log_time' && key === 'task_id' ? `[${flag}]` : flag);
+  }
   return [op.command, ...arguments_].join(' ');
 }
 const wordmark = [
@@ -135,6 +138,7 @@ function helpFor(op) {
   return [
     `tick ${commandUsage(op)}`,
     op.description,
+    ...(op.name === 'log_time' ? ['Omit --task-id in a terminal to choose a task. Scripts and --json require a task ID.'] : []),
     '',
     ...Object.entries(op.inputSchema.properties).map(
       ([k, p]) => `  --${flagFor(k)} <${p.enum?.join('|') || p.type}>  ${p.description ?? p.format ?? ''}`
@@ -236,19 +240,9 @@ async function login(args) {
   if (typeof token !== 'string' || !token.trim() || /[\s\x00-\x1f\x7f]/.test(token))
     usage('Invalid API token.');
   const account = { subscriptionId: sub, token, origin: base };
-  const users = await api(account)('users');
-  const user = v.email
-    ? users.find((u) => String(u.email).toLowerCase() === v.email.toLowerCase())
-    : users.length === 1
-      ? users[0]
-      : null;
-  if (v.email && !user)
-    throw new TickError(
-      'configuration',
-      'Tick accepted the login but could not match your user on that subscription.'
-    );
+  if (v.email) account.verifiedEmail = v.email.toLowerCase();
+  const user = await identity(account, api(account));
   if (user) account.userId = positiveId(user.id, 'user id');
-  if (v.email && user) account.verifiedEmail = v.email.toLowerCase();
   await saveAccount(account);
   show({
     subscription_id: sub,
@@ -330,8 +324,24 @@ async function main() {
     }
     dryRun = Boolean(parsed.values['dry-run']);
   }
-  validate(op.inputSchema, inputs);
+  const interactiveLog =
+    first === 'log' && inputs.task_id === undefined && !json &&
+    process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY;
+  if (interactiveLog) {
+    validate({ ...op.inputSchema, required: op.inputSchema.required.filter((key) => key !== 'task_id') }, inputs);
+    hours(inputs.duration);
+  } else {
+    validate(op.inputSchema, inputs);
+  }
   const account = await accountForCall(process.env.TICK_EXPECTED_SESSION);
+  if (interactiveLog) {
+    if (!dryRun) requireWriteAccess(account);
+    inputs.task_id = await pickTask(account);
+    if (inputs.task_id === null) {
+      process.stderr.write('Cancelled.\n');
+      return;
+    }
+  }
   show(await execute(op, inputs, account, dryRun));
 }
 main().catch((error) => {

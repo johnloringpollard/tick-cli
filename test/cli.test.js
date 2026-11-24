@@ -31,6 +31,7 @@ async function fixture(t) {
   const entries = [{ id: 4, task_id: 9, user_id: 7, date: '2026-11-24', hours: 0.5, locked: false }];
   const users = [{ id: 7, first_name: 'Ana', last_name: 'Reed', email: 'ana@local.test' }];
   let timer = { id: 2, task_id: 9, last_started_at: null, accumulated_seconds: 1800 };
+  let me = { id: 7, first_name: 'Ana', last_name: 'Reed' };
   let redirect = false;
   let failure;
   let beforeSave = async () => {};
@@ -61,6 +62,7 @@ async function fixture(t) {
     if (req.headers.authorization !== `Token token=${token}` || !u.pathname.startsWith('/42/api/v2/'))
       return reply(401, {});
     const path = u.pathname.slice('/42/api/v2/'.length, -5);
+    if (path === 'me') return reply(me === undefined ? 404 : 200, me);
     if (path === 'users') return reply(200, users);
     if (['tasks', 'tasks/recent'].includes(path)) {
       const uid = u.searchParams.get('user_id');
@@ -142,6 +144,7 @@ async function fixture(t) {
     env,
     invoke,
     call,
+    setMe: (user) => { me = user; },
     beforeSave: (fn) => {
       beforeSave = fn;
     },
@@ -266,10 +269,11 @@ test('login selects an account, scopes the saved credential and never prints rol
   ok(await cli(env, ['logout', '--json']));
   assert.equal(bad(await cli(env, ['account', '--json'])).code, 'configuration');
 });
-test('ambiguous admin identity, HTTPS, HTTP errors and redirects fail closed', async (t) => {
+test('older servers with ambiguous admin identity, HTTPS errors and redirects fail closed', async (t) => {
   const f = await fixture(t);
   f.users.push({ id: 8, first_name: 'Sam' });
   f.entries.length = 0;
+  f.setMe(undefined);
   assert.equal(bad(await f.call('log_time', { task_id: 9, duration: '1h' })).code, 'identity_required');
   assert.equal(
     bad(await cli({ ...f.env, TICK_BASE_URL: 'http://example.org' }, ['users', 'list', '--json'])).code,
@@ -310,30 +314,38 @@ test('report totals complete pages and preserves the four-decimal entry precisio
     'report_changed'
   );
 });
-test('an explicit user ID cannot establish ownership for an ambiguous admin token', async (t) => {
+test('the authenticated token owner can log the first entry of the week', async (t) => {
   const f = await fixture(t);
-  f.users.push({ id: 8, first_name: 'Sam', last_name: 'Gray', email: 'sam@local.test' });
+  f.users.push({ id: 8, first_name: 'Sam', last_name: 'Gray' });
   f.entries.length = 0;
   const env = { ...f.env, TICK_USER_ID: '8' };
   const args = ['call', 'log_time', '--json'];
   const input = JSON.stringify({ task_id: 9, duration: '45m' });
-  assert.equal(bad(await cli(env, args, input)).code, 'identity_required');
-  assert.equal(bad(await cli({ ...env, TICK_USER_ID: '7' }, args, input)).code, 'identity_required');
+  assert.equal(bad(await cli(env, args, input)).code, 'configuration');
   assert.ok(!f.calls.some((c) => c.method === 'POST'));
 
-  const profileEnv = { XDG_CONFIG_HOME: f.dir, TICK_BASE_URL: f.env.TICK_BASE_URL };
-  ok(
-    await cli(
-      profileEnv,
-      ['login', '--email', 'ana@local.test', '--subscription-id', '42', '--password-stdin', '--json'],
-      'password'
-    )
-  );
-  const saved = ok(await cli(profileEnv, args, input));
-  assert.equal(saved.user_id, 7);
-  f.entries.length = 0;
-  assert.equal(bad(await cli(env, args, input)).code, 'identity_required');
+  const result = ok(await cli({ ...env, TICK_USER_ID: '7' }, args, input));
+  assert.equal(result.user_id, 7);
+  assert.equal(result.hours, 0.75);
+  assert.ok(!f.calls.some((c) => /users|entries\/this_week/.test(c.path)));
+  const account = ok(await f.invoke('account'));
+  assert.equal(account.user_name, 'Ana Reed');
+
+  f.setMe({ id: null });
+  assert.equal(bad(await cli(env, args, input)).code, 'invalid_response');
   assert.equal(f.calls.filter((c) => c.method === 'POST').length, 1);
+});
+test('an older server can verify a saved email login for an empty week', async (t) => {
+  const f = await fixture(t);
+  f.setMe(undefined);
+  f.users.push({ id: 8, first_name: 'Sam', email: 'sam@local.test' });
+  f.entries.length = 0;
+  const profile = { XDG_CONFIG_HOME: f.dir, TICK_BASE_URL: f.env.TICK_BASE_URL };
+  ok(await cli(profile, ['login', '--email', 'ana@local.test', '--subscription-id', '42', '--password-stdin', '--json'], 'password'));
+  const args = ['call', 'log_time', '--json'];
+  const input = JSON.stringify({ task_id: 9, duration: '45m' });
+  assert.equal(bad(await cli({ ...f.env, TICK_USER_ID: '8' }, args, input)).code, 'identity_required');
+  assert.equal(ok(await cli(profile, args, input)).user_id, 7);
 });
 test('MCP session binding rejects changed accounts before contacting Tick', async (t) => {
   const f = await fixture(t);
