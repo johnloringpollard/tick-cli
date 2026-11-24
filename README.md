@@ -90,7 +90,7 @@ tick timers update 7 --task-id 24
 tick timers save 7
 ```
 
-Use `tick timers start` to start tracking before you choose a task, or `tick timers start 24` to start on task 24. You can pause and resume an unassigned timer. Assign a task before saving it.
+Use `tick timers start` to start tracking before you choose a task, or `tick timers start 24` to start on task 24. `tick timers list` shows all your running and paused timers in the selected account, including those without a task. Assign a task before saving a timer as a time entry.
 
 When you assign a task or resume a timer with a task, the task and project must be open and the project must be assigned to you. An administrator who can see additional projects must still be assigned to the selected project. You can retarget a timer whose previous project has closed.
 
