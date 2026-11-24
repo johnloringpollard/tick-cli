@@ -3,6 +3,7 @@ import { parseArgs, inspect } from 'node:util';
 import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   TickError,
   usage,
@@ -93,6 +94,27 @@ function commandUsage(op) {
     if (!op.positional.includes(key)) arguments_.push(`--${flagFor(key)} <value>`);
   return [op.command, ...arguments_].join(' ');
 }
+const wordmark = [
+  '████████  ██   ▄██████  ██  ▄██',
+  '   ██     ██  ██▀       ██▄██▀',
+  '   ██     ██  ██        ████',
+  '   ██     ██  ██▄       ██▀██▄',
+  '   ██     ██   ▀██████  ██  ▀██',
+];
+
+async function printWordmark(output, animate = false) {
+  if (json || !process.stdin.isTTY || !process.stdout.isTTY || !output.isTTY) return;
+  if (process.env.CI || process.env.TERM === 'dumb') return;
+  if (output.columns > 0 && output.columns < wordmark[0].length) return;
+
+  const color = !Object.hasOwn(process.env, 'NO_COLOR') && output.hasColors();
+  for (const [index, line] of wordmark.entries()) {
+    if (animate && index > 0) await delay(40);
+    output.write((color ? `\x1b[1;32m${line}\x1b[0m` : line) + '\n');
+  }
+  output.write('\n');
+}
+
 function usageText(selection = operations) {
   return [
     'Tick time tracking',
@@ -174,6 +196,7 @@ async function login(args) {
   if (legacy && (v['no-browser'] || v['allow-writes']))
     usage('--no-browser and --allow-writes apply to browser login.');
   if (!legacy) {
+    await printWordmark(process.stderr, true);
     const account = await browserLogin(base, { noBrowser: v['no-browser'], allowWrites: v['allow-writes'] });
     await saveAccount(account);
     return show({
@@ -239,8 +262,10 @@ async function main() {
     const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url)));
     return console.log(version);
   }
-  if (!argv.length || argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help')
+  if (!argv.length || argv[0] === '--help' || argv[0] === '-h' || argv[0] === 'help') {
+    await printWordmark(process.stdout);
     return console.log(usageText());
+  }
   const [first, ...rest] = argv;
   if (first === 'login') return login(rest);
   if (first === 'session') {
