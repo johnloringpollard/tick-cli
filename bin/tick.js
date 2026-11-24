@@ -19,7 +19,7 @@ import {
   api,
 } from '../lib/api.js';
 import { browserLogin } from '../lib/oauth.js';
-import { operations, catalog, validate, execute, hours } from '../lib/operations.js';
+import { operations, catalog, validate, execute, hours, requireWriteAccess } from '../lib/operations.js';
 import { pickTask, display } from '../lib/task-picker.js';
 
 const argv = process.argv.slice(2);
@@ -335,6 +335,7 @@ async function main() {
   }
   const account = await accountForCall(process.env.TICK_EXPECTED_SESSION);
   if (interactiveLog) {
+    if (!dryRun) requireWriteAccess(account);
     inputs.task_id = await pickTask(account);
     if (inputs.task_id === null) {
       process.stderr.write('Cancelled.\n');
