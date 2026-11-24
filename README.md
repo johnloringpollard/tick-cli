@@ -21,7 +21,7 @@ tick account
 
 Browser login requires a Tick server with the OAuth provider deployed. On an older server, use the existing API token login described below.
 
-Tick opens your browser. Choose your subscription and approve read access. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission. To create or update users, clients, projects, or tasks, sign in as a subscription administrator with `tick login --allow-admin`. To request both permissions in one login, use `tick login --allow-writes --allow-admin`.
+Tick opens your browser. Choose the subscription you want to connect. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission. If you own or administer the selected subscription, you can create and edit users, clients, projects, and tasks as soon as you sign in. Tick checks your current role on each request.
 
 If the browser does not open, follow the URL printed in the terminal. Use `tick login --no-browser` to skip the automatic launch. Open the link on the same computer as the CLI. Over SSH, forward the loopback port shown in the link’s `redirect_uri` to the same port on the remote host.
 

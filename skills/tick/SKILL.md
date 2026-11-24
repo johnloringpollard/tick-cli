@@ -5,7 +5,7 @@ description: Use Tick time tracking to review a timesheet, find project or task 
 
 # Tick time tracking
 
-Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Browser login grants read access by default. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. To create or update users, clients, projects, or tasks, a subscription administrator needs `tick login --allow-admin`. Include both flags to authorize both kinds of write. Restart the MCP server after a new login. Keep credentials out of the conversation.
+Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Account owners and administrators can create and edit users, clients, projects, and tasks after signing in. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. Restart the MCP server after a new login. Keep credentials out of the conversation.
 
 ## Manage a subscription
 

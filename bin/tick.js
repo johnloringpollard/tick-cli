@@ -19,7 +19,7 @@ import {
   api,
 } from '../lib/api.js';
 import { browserLogin } from '../lib/oauth.js';
-import { operations, catalog, validate, execute, hours, requireWriteAccess } from '../lib/operations.js';
+import { operations, catalog, validate, execute, hours, requireTimeWriteAccess } from '../lib/operations.js';
 import { pickTask, display } from '../lib/task-picker.js';
 
 const argv = process.argv.slice(2);
@@ -132,7 +132,7 @@ function usageText(selection = operations) {
     '',
     ...selection.map((op) => `  tick ${commandUsage(op)}`),
     '',
-    '  tick login [--allow-writes] [--allow-admin] [--no-browser]',
+    '  tick login [--allow-writes] [--no-browser]',
     '  tick login --subscription-id ID [--token-stdin]',
     '  tick login --email EMAIL [--subscription-id ID] [--password-stdin]',
     '  tick logout',
@@ -191,7 +191,6 @@ async function login(args) {
   const options = {
     'no-browser': { type: 'boolean' },
     'allow-writes': { type: 'boolean' },
-    'allow-admin': { type: 'boolean' },
     'subscription-id': { type: 'string' },
     email: { type: 'string' },
     'token-stdin': { type: 'boolean' },
@@ -207,12 +206,12 @@ async function login(args) {
     usage('Use --email for password login, or --subscription-id for token login.');
   const base = origin(process.env.TICK_BASE_URL);
   const legacy = v.email || v['subscription-id'] || v['token-stdin'] || v['password-stdin'];
-  if (legacy && (v['no-browser'] || v['allow-writes'] || v['allow-admin']))
-    usage('--no-browser, --allow-writes and --allow-admin apply to browser login.');
+  if (legacy && (v['no-browser'] || v['allow-writes']))
+    usage('--no-browser and --allow-writes apply to browser login.');
   if (!legacy) {
     await printWordmark(process.stderr, true);
     const account = await browserLogin(base, {
-      noBrowser: v['no-browser'], allowWrites: v['allow-writes'], allowAdmin: v['allow-admin'],
+      noBrowser: v['no-browser'], allowWrites: v['allow-writes'],
     });
     await saveAccount(account);
     return show({
@@ -311,7 +310,7 @@ async function main() {
     const group = operations.filter((op) => op.command.split(' ')[0] === first);
     if (!group.length) usage('Unknown command. Run tick --help.');
     let verb = rest[0];
-    if (group.some((op) => op.writeScope === 'account:write')) {
+    if (group.some((op) => op.writeKind === 'account')) {
       if (verb === 'add') verb = 'create';
       if (verb === 'edit') verb = 'update';
     }
@@ -323,7 +322,7 @@ async function main() {
     const props = op.inputSchema.properties;
     const opts = { ...globalOptions };
     for (const key of Object.keys(props)) {
-      const selector = op.writeScope === 'account:write' && (key.endsWith('_id') || Object.hasOwn(props, key + '_id'));
+      const selector = op.writeKind === 'account' && (key.endsWith('_id') || Object.hasOwn(props, key + '_id'));
       opts[flagFor(key)] = { type: 'string', multiple: selector };
     }
     const parsed = parse(op.command === first ? rest : rest.slice(1), opts);
@@ -361,7 +360,7 @@ async function main() {
   }
   const account = await accountForCall(process.env.TICK_EXPECTED_SESSION);
   if (interactiveLog) {
-    if (!dryRun) requireWriteAccess(account, op.writeScope);
+    if (!dryRun) requireTimeWriteAccess(account);
     inputs.task_id = await pickTask(account);
     if (inputs.task_id === null) {
       process.stderr.write('Cancelled.\n');
