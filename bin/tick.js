@@ -15,6 +15,7 @@ import {
   origin,
   positiveId,
   request,
+  identity,
   api,
 } from '../lib/api.js';
 import { browserLogin } from '../lib/oauth.js';
@@ -236,19 +237,9 @@ async function login(args) {
   if (typeof token !== 'string' || !token.trim() || /[\s\x00-\x1f\x7f]/.test(token))
     usage('Invalid API token.');
   const account = { subscriptionId: sub, token, origin: base };
-  const users = await api(account)('users');
-  const user = v.email
-    ? users.find((u) => String(u.email).toLowerCase() === v.email.toLowerCase())
-    : users.length === 1
-      ? users[0]
-      : null;
-  if (v.email && !user)
-    throw new TickError(
-      'configuration',
-      'Tick accepted the login but could not match your user on that subscription.'
-    );
+  if (v.email) account.verifiedEmail = v.email.toLowerCase();
+  const user = await identity(account, api(account));
   if (user) account.userId = positiveId(user.id, 'user id');
-  if (v.email && user) account.verifiedEmail = v.email.toLowerCase();
   await saveAccount(account);
   show({
     subscription_id: sub,

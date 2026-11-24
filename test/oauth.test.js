@@ -64,6 +64,8 @@ async function fixture(t) {
       grants.delete(fields.get('token'));
       return reply(200, {});
     }
+    if (req.url === '/41/api/v2/me.json' && req.headers.authorization === 'Token token=legacy')
+      return reply(200, { id: 8, first_name: 'Lee' });
     if (req.url === '/41/api/v2/users.json' && req.headers.authorization === 'Token token=legacy')
       return reply(200, [{ id: 8 }]);
     const grant = Array.from(grants.values()).find(
@@ -77,6 +79,7 @@ async function fixture(t) {
         connection_id: String(grant.id),
         scope: grant.scope,
       });
+    if (req.url === '/41/api/v2/me.json') return reply(200, { id: 8, first_name: 'Lee' });
     if (req.url === '/41/api/v2/users.json') return reply(200, [{ id: 9 }, { id: 8, first_name: 'Lee' }]);
     if (req.url === '/41/api/v2/timers/1/pause.json' && req.method === 'PUT') {
       state.writes++;
