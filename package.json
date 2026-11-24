@@ -1,0 +1,12 @@
+{
+  "name": "tickspot-cli",
+  "version": "0.1.0",
+  "description": "The command-line client for Tick time tracking",
+  "private": true,
+  "type": "module",
+  "bin": { "tick": "bin/tick.js" },
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test" },
+  "files": ["bin", "lib", "skills", "README.md"],
+  "repository": { "type": "git", "url": "https://github.com/tick/tick-cli.git" }
+}
