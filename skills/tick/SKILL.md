@@ -5,7 +5,7 @@ description: Use Tick time tracking to review a timesheet, find project or task 
 
 # Tick time tracking
 
-Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Keep credentials out of the conversation.
+Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Browser login grants read access by default. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. Restart the MCP server after a new login. Keep credentials out of the conversation.
 
 ## Review a week or budget
 
