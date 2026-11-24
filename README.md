@@ -1,6 +1,6 @@
 # Tick CLI
 
-Use `tick` to review a timesheet, find a client or task, check a budget, record time, or manage a timer. Each operation has a terminal command and a JSON interface for agents. The client talks directly to the [Tick API v2](https://github.com/tick/tick-api).
+Use `tick` to review a timesheet, find a client or task, check a budget, record time, manage a timer, or administer a subscription. Each operation has a terminal command and a JSON interface for agents. The client talks directly to the [Tick API v2](https://github.com/tick/tick-api).
 
 ## Install
 
@@ -21,7 +21,7 @@ tick account
 
 Browser login requires a Tick server with the OAuth provider deployed. On an older server, use the existing API token login described below.
 
-Tick opens your browser. Choose your subscription and approve read access. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission.
+Tick opens your browser. Choose your subscription and approve read access. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission. To create or update users, clients, projects, or tasks, sign in as a subscription administrator with `tick login --allow-admin`. To request both permissions in one login, use `tick login --allow-writes --allow-admin`.
 
 If the browser does not open, follow the URL printed in the terminal. Use `tick login --no-browser` to skip the automatic launch. Open the link on the same computer as the CLI. Over SSH, forward the loopback port shown in the link’s `redirect_uri` to the same port on the remote host.
 
@@ -65,6 +65,23 @@ Check the project and task IDs before posting, especially when names repeat. A t
 | `tick timers pause ID`, `tick timers resume ID`, `tick timers save ID` | Pause, resume or turn a timer into a time entry. |
 
 Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A preview with an explicit task ID runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
+
+### Manage a subscription
+
+```sh
+tick users create --first-name Jo --last-name Park --email jo@example.com --dry-run
+tick users update 8 --billable-rate 85.50
+tick clients create --name "Acme"
+tick clients update 3 --name "Acme Studio"
+tick projects create --client-id 3 --owner-id 8 --name "Launch" --budget 40
+tick projects update 16 --billable false
+tick tasks create --project-id 16 --name "Design"
+tick tasks update 24 --due-date 2026-12-15
+```
+
+Creating a user sends an email invitation. Administrators can change a member's role and hourly rate for the selected subscription. They can also change the first name, last name and time zone of a person who belongs only to that subscription. Login email and password changes belong to the user. The subscription owner keeps the administrator role.
+
+Creating a project assigns all users in the subscription. Use `--help` on any create or update command to see its supported fields. Updates send only the fields you supply.
 
 ### Reports and budgets
 

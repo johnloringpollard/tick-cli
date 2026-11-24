@@ -81,6 +81,10 @@ async function fixture(t) {
       });
     if (req.url === '/41/api/v2/me.json') return reply(200, { id: 8, first_name: 'Lee' });
     if (req.url === '/41/api/v2/users.json') return reply(200, [{ id: 9 }, { id: 8, first_name: 'Lee' }]);
+    if (req.url === '/41/api/v2/clients.json' && req.method === 'POST') {
+      state.writes++;
+      return reply(201, { id: 3, name: JSON.parse(body).client.name });
+    }
     if (req.url === '/41/api/v2/timers/1/pause.json' && req.method === 'PUT') {
       state.writes++;
       return reply(401, {});
@@ -138,7 +142,10 @@ async function fixture(t) {
       assert.equal(params.get('client_id'), 'tick-cli');
       assert.equal(params.get('response_type'), 'code');
       assert.equal(params.get('code_challenge_method'), 'S256');
-      assert.equal(params.get('scope'), args.includes('--allow-writes') ? 'read time:write' : 'read');
+      assert.deepEqual(new Set(params.get('scope').split(' ')), new Set([
+        'read', ...(args.includes('--allow-writes') ? ['time:write'] : []),
+        ...(args.includes('--allow-admin') ? ['account:write'] : []),
+      ]));
       const target = new URL(params.get('redirect_uri'));
       assert.equal(target.hostname, '127.0.0.1');
       assert.equal(target.pathname, '/callback');
@@ -301,4 +308,23 @@ test('replacement preserves a malformed or unreadable profile and reports how to
   assert.match(unreadable.stderr, /Check its file type and permissions/);
   assert.ok((await stat(f.profile)).isDirectory());
   assert.equal(f.state.grants.size, 1);
+});
+
+test('browser account changes and time changes request and enforce independent scopes', async (t) => {
+  const f = await fixture(t);
+  const create = ['clients', 'create', '--name', 'Studio'];
+  const time = ['timers', 'pause', '1'];
+  for (const flags of [[], ['--allow-writes'], ['--allow-admin'], ['--allow-admin', '--allow-writes']]) {
+    const login = await f.login(flags);
+    assert.equal(login.code, 0, login.stderr);
+    const client = await f.run(create);
+    if (flags.includes('--allow-admin')) assert.equal(client.code, 0, client.stderr);
+    else assert.match(JSON.parse(client.stderr).error.message, /--allow-admin/);
+    const timer = await f.run(time);
+    if (flags.includes('--allow-writes')) assert.equal(JSON.parse(timer.stderr).error.status, 401);
+    else assert.match(JSON.parse(timer.stderr).error.message, /--allow-writes/);
+  }
+  assert.equal(f.state.writes, 4);
+  const legacy = await f.run(['login', '--allow-admin', '--subscription-id', '41']);
+  assert.equal(JSON.parse(legacy.stderr).error.code, 'invalid_input');
 });

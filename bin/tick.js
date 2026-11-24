@@ -124,7 +124,7 @@ function usageText(selection = operations) {
     '',
     ...selection.map((op) => `  tick ${commandUsage(op)}`),
     '',
-    '  tick login [--allow-writes] [--no-browser]',
+    '  tick login [--allow-writes] [--allow-admin] [--no-browser]',
     '  tick login --subscription-id ID [--token-stdin]',
     '  tick login --email EMAIL [--subscription-id ID] [--password-stdin]',
     '  tick logout',
@@ -182,6 +182,7 @@ async function login(args) {
   const options = {
     'no-browser': { type: 'boolean' },
     'allow-writes': { type: 'boolean' },
+    'allow-admin': { type: 'boolean' },
     'subscription-id': { type: 'string' },
     email: { type: 'string' },
     'token-stdin': { type: 'boolean' },
@@ -197,11 +198,13 @@ async function login(args) {
     usage('Use --email for password login, or --subscription-id for token login.');
   const base = origin(process.env.TICK_BASE_URL);
   const legacy = v.email || v['subscription-id'] || v['token-stdin'] || v['password-stdin'];
-  if (legacy && (v['no-browser'] || v['allow-writes']))
-    usage('--no-browser and --allow-writes apply to browser login.');
+  if (legacy && (v['no-browser'] || v['allow-writes'] || v['allow-admin']))
+    usage('--no-browser, --allow-writes and --allow-admin apply to browser login.');
   if (!legacy) {
     await printWordmark(process.stderr, true);
-    const account = await browserLogin(base, { noBrowser: v['no-browser'], allowWrites: v['allow-writes'] });
+    const account = await browserLogin(base, {
+      noBrowser: v['no-browser'], allowWrites: v['allow-writes'], allowAdmin: v['allow-admin'],
+    });
     await saveAccount(account);
     return show({
       signed_in: true,
@@ -319,8 +322,12 @@ async function main() {
       const value = flag ?? arg;
       if (value === undefined) continue;
       if (p.type === 'boolean' && !['true', 'false'].includes(value)) usage(`${name} must be true or false.`);
-      inputs[name] =
-        p.type === 'integer' ? positiveId(value, name) : p.type === 'boolean' ? value === 'true' : value;
+      if (p.type === 'number') {
+        if (!/^\d+(?:\.\d+)?$/.test(value)) usage(`${name} must be a nonnegative decimal number.`);
+        inputs[name] = Number(value);
+      } else if (p.type === 'integer') inputs[name] = positiveId(value, name);
+      else if (p.type === 'boolean') inputs[name] = value === 'true';
+      else inputs[name] = value;
     }
     dryRun = Boolean(parsed.values['dry-run']);
   }
@@ -335,7 +342,7 @@ async function main() {
   }
   const account = await accountForCall(process.env.TICK_EXPECTED_SESSION);
   if (interactiveLog) {
-    if (!dryRun) requireWriteAccess(account);
+    if (!dryRun) requireWriteAccess(account, op.writeScope);
     inputs.task_id = await pickTask(account);
     if (inputs.task_id === null) {
       process.stderr.write('Cancelled.\n');

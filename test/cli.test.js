@@ -63,6 +63,8 @@ async function fixture(t) {
       return reply(401, {});
     const path = u.pathname.slice('/42/api/v2/'.length, -5);
     if (path === 'me') return reply(me === undefined ? 404 : 200, me);
+    if (/^(users|clients|projects|tasks)(\/\d+)?$/.test(path) && ['POST', 'PUT'].includes(req.method))
+      return reply(req.method === 'POST' ? 201 : 200, { id: 12, ...Object.values(body)[0] });
     if (path === 'users') return reply(200, users);
     if (['tasks', 'tasks/recent'].includes(path)) {
       const uid = u.searchParams.get('user_id');
@@ -435,4 +437,50 @@ test('an indeterminate timer conversion retains a marker across invocations', as
   assert.ok((await stat(first.lock_directory)).isDirectory());
   assert.equal(bad(await f.invoke('timers', 'save', '2')).code, 'timer_save_locked');
   assert.equal(f.calls.filter((c) => c.path.endsWith('create_from_timer.json')).length, 1);
+});
+
+test('terminal and JSON account commands send only supplied fields under the resource key', async (t) => {
+  const f = await fixture(t);
+  const scenarios = [
+    ['user', { first_name: 'Jo', last_name: 'Park', email: 'jo@example.test' }, { admin: false, billable_rate: 0 }],
+    ['client', { name: 'Studio' }, { archive: false }],
+    ['project', { client_id: 3, owner_id: 7, name: 'Launch' }, { budget: 0, recurring: false }],
+    ['task', { project_id: 5, name: 'Design', budget: 1.5 }, { billable: false, due_date: '2026-12-01' }],
+  ];
+  for (const [resource, create, update] of scenarios) {
+    const plural = resource + 's';
+    const flags = Object.entries(create).flatMap(([k, v]) => ['--' + k.replaceAll('_', '-'), String(v)]);
+    const created = await cli(f.env, [plural, 'create', ...flags]);
+    assert.equal(created.code, 0, created.stderr);
+    assert.match(created.stdout, /id: 12/);
+    assert.deepEqual(f.calls.at(-1), {
+      path: '/42/api/v2/' + plural + '.json', method: 'POST', query: {}, body: { [resource]: create },
+    });
+    assert.deepEqual(ok(await f.call('update_' + resource, { [resource + '_id']: 12, ...update })), {
+      id: 12, ...update,
+    });
+    assert.deepEqual(f.calls.at(-1), {
+      path: '/42/api/v2/' + plural + '/12.json', method: 'PUT', query: {}, body: { [resource]: update },
+    });
+  }
+});
+test('account write previews stay offline, and invalid edits and mismatched token owners cannot write', async (t) => {
+  const f = await fixture(t);
+  f.env.TICK_USER_ID = '99';
+  const dry = ok(await f.invoke('tasks', 'update', '12', '--budget', '2.75', '--dry-run'));
+  assert.deepEqual(dry, {
+    dry_run: true, path: '/42/api/v2/tasks/12.json', method: 'PUT', body: { task: { budget: 2.75 } },
+  });
+  for (const [name, data] of [
+    ['create_project', { name: 'Launch', client_id: 3 }],
+    ['update_user', { user_id: 12, email: 'jo@example.test' }],
+    ['update_user', { user_id: 12, password: 'unused' }],
+    ['update_client', { client_id: 12 }],
+    ['update_task', { task_id: 12, budget: -1 }],
+    ['update_project', { project_id: 12, budget: '2' }],
+  ]) assert.equal(bad(await f.call(name, data)).code, 'invalid_input');
+  assert.equal(bad(await f.invoke('tasks', 'update', '12', '--budget', '')).code, 'invalid_input');
+  assert.equal(f.calls.length, 0);
+  assert.equal(bad(await f.invoke('clients', 'update', '12', '--name', 'Studio')).code, 'configuration');
+  assert.deepEqual(f.calls.map((call) => call.method), ['GET']);
 });

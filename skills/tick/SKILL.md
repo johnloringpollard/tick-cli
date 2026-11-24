@@ -1,11 +1,15 @@
 ---
 name: tick
-description: Use Tick time tracking to review a timesheet, find project or task budgets, record time, or manage a timer with the Tick CLI.
+description: Use Tick time tracking to review a timesheet, find project or task budgets, record time, manage a timer, or administer a subscription with the Tick CLI.
 ---
 
 # Tick time tracking
 
-Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Browser login grants read access by default. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. Restart the MCP server after a new login. Keep credentials out of the conversation.
+Use `tick tools --json` to discover the installed operations and input schemas. Use `tick account --json` to identify the selected subscription and user. Ask the user to run `tick login` in their terminal if authorization is missing. Browser login grants read access by default. If the user wants to record time or change timers, ask them to run `tick login --allow-writes` and approve the permission in Tick. To create or update users, clients, projects, or tasks, a subscription administrator needs `tick login --allow-admin`. Include both flags to authorize both kinds of write. Restart the MCP server after a new login. Keep credentials out of the conversation.
+
+## Manage a subscription
+
+Use the `create_user`, `update_user`, `create_client`, `update_client`, `create_project`, `update_project`, `create_task` and `update_task` schemas in `tick tools --json`. Updates take the resource ID and the fields to change. User creation sends an invitation. Project creation assigns all users in the subscription. Preview either with `--dry-run` when the user requests a draft.
 
 ## Review a week or budget
 
