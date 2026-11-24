@@ -16,6 +16,7 @@ import {
   request,
   api,
 } from '../lib/api.js';
+import { browserLogin } from '../lib/oauth.js';
 import { operations, catalog, validate, execute } from '../lib/operations.js';
 
 const argv = process.argv.slice(2);
@@ -98,6 +99,7 @@ function usageText(selection = operations) {
     '',
     ...selection.map((op) => `  tick ${commandUsage(op)}`),
     '',
+    '  tick login [--allow-writes] [--no-browser]',
     '  tick login --subscription-id ID [--token-stdin]',
     '  tick login --email EMAIL [--subscription-id ID] [--password-stdin]',
     '  tick logout',
@@ -152,6 +154,8 @@ async function secret(name, fromStdin) {
 }
 async function login(args) {
   const options = {
+    'no-browser': { type: 'boolean' },
+    'allow-writes': { type: 'boolean' },
     'subscription-id': { type: 'string' },
     email: { type: 'string' },
     'token-stdin': { type: 'boolean' },
@@ -166,6 +170,19 @@ async function login(args) {
   if ((v.email && v['token-stdin']) || (!v.email && v['password-stdin']))
     usage('Use --email for password login, or --subscription-id for token login.');
   const base = origin(process.env.TICK_BASE_URL);
+  const legacy = v.email || v['subscription-id'] || v['token-stdin'] || v['password-stdin'];
+  if (legacy && (v['no-browser'] || v['allow-writes']))
+    usage('--no-browser and --allow-writes apply to browser login.');
+  if (!legacy) {
+    const account = await browserLogin(base, { noBrowser: v['no-browser'], allowWrites: v['allow-writes'] });
+    await saveAccount(account);
+    return show({
+      signed_in: true,
+      subscription_id: account.subscriptionId,
+      user_id: account.userId,
+      scope: account.scope,
+    });
+  }
   let sub = v['subscription-id'] ? positiveId(v['subscription-id'], 'subscription id') : undefined;
   let token, company;
   if (v.email) {
@@ -240,8 +257,8 @@ async function main() {
       return json
         ? show(catalog())
         : console.log(operations.map((op) => `${op.name}  ${op.description}`).join('\n'));
-    await forgetAccount();
-    return show({ local_credentials_removed: true });
+    const revoked = await forgetAccount();
+    return show({ local_credentials_removed: true, ...(revoked && { connection_revoked: true }) });
   }
   let op, inputs, dryRun;
   if (first === 'call') {

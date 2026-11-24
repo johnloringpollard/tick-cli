@@ -18,21 +18,27 @@ You can also run `node bin/tick.js` from the checkout without installing anythin
 ## Connect a Tick account
 
 ```sh
-tick login --email you@your-company.com
+tick login
 tick account
 ```
 
-Enter your Tick password at the hidden prompt. Tick exchanges it for the selected subscription’s API token. If you belong to several subscriptions, the CLI lists the companies and IDs. Repeat login with `--subscription-id ID` to choose one. The CLI stores the token, subscription, and identified user in a private-permissions file at `$XDG_CONFIG_HOME/tick/account.json` or `~/.config/tick/account.json`. Login replaces the selected account. The password is used only during login. `tick logout` removes the local file.
+Browser login requires a Tick server with the OAuth provider deployed. On an older server, use the existing API token login described below.
 
-You can use your existing API token instead:
+Tick opens your browser. Choose your subscription and approve read access. If you already have a Tick session in that browser, you can use it. To log time or change timers, run `tick login --allow-writes` and approve the additional permission.
+
+If the browser does not open, follow the URL printed in the terminal. Use `tick login --no-browser` to skip the automatic launch. Open the link on the same computer as the CLI. Over SSH, forward the loopback port shown in the link’s `redirect_uri` to the same port on the remote host.
+
+The CLI saves the selected account and its credentials in `$XDG_CONFIG_HOME/tick/account.json` or `~/.config/tick/account.json` with owner-only permissions. It renews browser credentials automatically. Signing in again revokes the previous saved browser connection before switching to the new account or permissions. When switching API origins, log out at the previous origin first. Run `tick logout` to revoke the saved browser connection and clear its credentials. If Tick cannot confirm revocation, the CLI keeps the file so you can retry.
+
+To sign in with an existing API token, run:
 
 ```sh
 tick login --subscription-id 123
 ```
 
-The prompt hides the token. To read a credential from a password manager, use `--token-stdin` or, with `--email`, `--password-stdin`. Never put a token or password in a command argument.
+The prompt hides your token. Scripts can pipe it with `--token-stdin`. The existing `tick login --email EMAIL` command also supports a hidden password prompt or `--password-stdin`; use `--subscription-id ID` to select among multiple accounts. Logging out of a legacy account removes the local file. Keep passwords and tokens out of command arguments.
 
-For a script, supply `TICK_SUBSCRIPTION_ID` and `TICK_API_TOKEN` together through its secret store. They override the saved account. Tick identifies regular members through the user list and administrators through their personal timesheet when it contains entries. When an administrator’s week is empty and several people are visible, use email login and unset the token environment overrides before writing personal entries. `TICK_USER_ID` can verify an independently identified account, but supplying an ID alone cannot establish which person owns a token.
+For a script, supply `TICK_SUBSCRIPTION_ID` and `TICK_API_TOKEN` together through its secret store. They override the saved account. Tick identifies regular members through the user list and administrators through their personal timesheet when it contains entries. When an administrator’s week is empty and several people are visible, use browser or email login and unset the token environment overrides before writing personal entries. `TICK_USER_ID` can verify an independently identified account, but supplying an ID alone cannot establish which person owns a token.
 
 ## First commands
 
@@ -100,7 +106,7 @@ printf '%s\n' '{"task_id":24,"duration":"45m","notes":"Planning"}' | tick call l
 
 `tools --json` returns the catalog, descriptions, JSON input schemas and tool annotations. `call` accepts exactly one JSON object on stdin. Every operation runs the same validation and Tick API calls as its terminal equivalent. `--json` writes a bare JSON value to stdout on success. On failure, stderr contains `{"error":{"code":"…","message":"…"}}` and the process exits with status 1 for service/configuration errors or 2 for invalid input. Rate-limit errors include `status` and `retry_after` when supplied by Tick.
 
-`tick session --json` returns an opaque local account binding. An integration can pass it in `TICK_EXPECTED_SESSION` on subsequent calls. A changed token, account, or removed profile returns `session_changed` before any Tick API request. Restart the integration to select the current account.
+`tick session --json` returns an opaque local account binding. An integration can pass it in `TICK_EXPECTED_SESSION` on subsequent calls. Browser credentials keep the same binding through automatic renewal. A new browser login, changed legacy token, account switch, or removed profile returns `session_changed` before any Tick API request. Restart the integration to select the current account.
 
 Use the [Tick MCP server](https://github.com/tick/tick-mcp) in a compatible assistant. The CLI also includes a portable [Tick skill](skills/tick/SKILL.md).
 
