@@ -79,7 +79,9 @@ tick tasks create --project-id 16 --name "Design"
 tick tasks update 24 --due-date 2026-12-15
 ```
 
-Creating a user sends an email invitation. Administrators can change a member's role and hourly rate for the selected subscription. They can also change the first name, last name and time zone of a person who belongs only to that subscription. Login email and password changes belong to the user. The subscription owner keeps the administrator role.
+In terminal commands for users, clients, projects, and tasks, `add` is an alias for `create`, and `edit` is an alias for `update`.
+
+Creating a user sends an email invitation. Inviting someone who already uses Tick preserves their existing profile. Administrators can change a member's role and hourly rate for the selected subscription. They can also change the first name, last name and time zone of a person who belongs only to that subscription. Login email and password changes belong to the user. The subscription owner keeps the administrator role.
 
 Creating a project assigns all users in the subscription. Use `--help` on any create or update command to see its supported fields. Updates send only the fields you supply.
 

@@ -484,3 +484,29 @@ test('account write previews stay offline, and invalid edits and mismatched toke
   assert.equal(bad(await f.invoke('clients', 'update', '12', '--name', 'Studio')).code, 'configuration');
   assert.deepEqual(f.calls.map((call) => call.method), ['GET']);
 });
+
+test('account add and edit aliases preview the same requests as create and update', async (t) => {
+  const f = await fixture(t);
+  const examples = [
+    ['users', ['--first-name', 'Jo', '--last-name', 'Park', '--email', 'jo@example.test'], ['--admin', 'false']],
+    ['clients', ['--name', 'Studio'], ['--archive', 'false']],
+    ['projects', ['--client-id', '3', '--owner-id', '7', '--name', 'Launch'], ['--budget', '1.5']],
+    ['tasks', ['--project-id', '5', '--name', 'Design'], ['--billable', 'true']],
+  ];
+  for (const [resource, add, edit] of examples) {
+    for (const [alias, verb, args] of [['add', 'create', add], ['edit', 'update', ['12', ...edit]]]) {
+      const preview = ok(await f.invoke(resource, alias, ...args, '--dry-run'));
+      assert.deepEqual(preview, ok(await f.invoke(resource, verb, ...args, '--dry-run')));
+    }
+  }
+  assert.equal(bad(await f.invoke('entries', 'edit', '12', '--notes', 'draft', '--dry-run')).code, 'invalid_input');
+  assert.equal(f.calls.length, 0);
+});
+
+test('hourly rates must fit the subscription billable rate in cents', async (t) => {
+  const f = await fixture(t);
+  const preview = ok(await f.invoke('users', 'edit', '12', '--billable-rate', '21474836.47', '--dry-run'));
+  assert.equal(preview.body.user.billable_rate, 21474836.47);
+  assert.equal(bad(await f.call('update_user', { user_id: 12, billable_rate: 21474836.48 })).code, 'invalid_input');
+  assert.equal(f.calls.length, 0);
+});

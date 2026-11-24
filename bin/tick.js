@@ -301,7 +301,12 @@ async function main() {
   } else {
     const group = operations.filter((op) => op.command.split(' ')[0] === first);
     if (!group.length) usage('Unknown command. Run tick --help.');
-    op = group.find((op) => op.command === first || op.command === first + ' ' + rest[0]);
+    let verb = rest[0];
+    if (group.some((op) => op.writeScope === 'account:write')) {
+      if (verb === 'add') verb = 'create';
+      if (verb === 'edit') verb = 'update';
+    }
+    op = group.find((op) => op.command === first || op.command === first + ' ' + verb);
     if (!op) {
       if (!rest.length || ['--help', '-h'].includes(rest[0])) return console.log(usageText(group));
       usage(`Unknown subcommand. Run tick ${first} --help.`);
