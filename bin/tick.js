@@ -89,7 +89,9 @@ function parse(args, options) {
 }
 const flagFor = (k) => k.replaceAll('_', '-');
 function commandUsage(op) {
-  const arguments_ = [...op.positional.map((key) => `<${key}>`)];
+  const arguments_ = op.positional.map((key) =>
+    op.inputSchema.required.includes(key) ? `<${key}>` : `[${key}]`
+  );
   for (const key of op.inputSchema.required) {
     if (op.positional.includes(key)) continue;
     const flag = `--${flagFor(key)} <value>`;

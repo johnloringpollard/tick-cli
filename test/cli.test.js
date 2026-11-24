@@ -251,6 +251,46 @@ test('timer start, pause, resume, save are distinct; saving twice cannot replay 
     ['timers.json', 'timers/2/pause.json', 'timers/2/start.json', 'entries/create_from_timer.json']
   );
 });
+test('timer start accepts an optional positional task, task flag or notes alone', async (t) => {
+  const f = await fixture(t);
+  const start = ok(await f.invoke('tools')).find((tool) => tool.name === 'start_timer');
+  assert.deepEqual(start.inputSchema.required, []);
+  assert.match((await cli({}, ['timers', 'start', '--help'])).stdout, /tick timers start \[task_id\]/);
+  assert.deepEqual(ok(await f.invoke('timers', 'start', '--dry-run')).body, { timer: { task_id: null } });
+  assert.deepEqual(ok(await f.invoke('timers', 'start', '--task-id', '9', '--dry-run')).body, {
+    timer: { task_id: 9 },
+  });
+  assert.equal(f.calls.length, 0);
+  assert.equal(ok(await f.invoke('timers', 'start')).task_id, null);
+  assert.equal(ok(await f.call('start_timer', { notes: 'Planning' })).notes, 'Planning');
+  assert.deepEqual(f.calls.map(({ method, body }) => [method, body]), [
+    ['POST', { timer: { task_id: null } }],
+    ['POST', { timer: { task_id: null, notes: 'Planning' } }],
+  ]);
+});
+test('an unassigned timer can pause and resume, then be assigned and saved', async (t) => {
+  const f = await fixture(t);
+  ok(await f.invoke('timers', 'start', '--notes', 'Planning'));
+  assert.equal(ok(await f.invoke('timers', 'pause', '2')).last_started_at, null);
+  assert.ok(ok(await f.invoke('timers', 'resume', '2')).last_started_at);
+  assert.match(bad(await f.invoke('timers', 'save', '2')).message, /tick timers update 2 --task-id/);
+  assert.ok(f.calls.every(({ path }) => path.includes('/timers')));
+  assert.equal(ok(await f.invoke('timers', 'update', '2', '--task-id', '9')).notes, 'Planning');
+  assert.equal(ok(await f.invoke('timers', 'save', '2')).task_id, 9);
+});
+test('taskless start and resume reject a mismatched configured user before writing', async (t) => {
+  const f = await fixture(t);
+  ok(await f.invoke('timers', 'start'));
+  ok(await f.invoke('timers', 'pause', '2'));
+  const before = f.calls.length;
+  f.env.TICK_USER_ID = '8';
+  for (const args of [['start'], ['resume', '2']]) {
+    const error = bad(await f.invoke('timers', ...args));
+    assert.equal(error.code, 'configuration');
+    assert.match(error.message, /configured user ID/);
+  }
+  assert.ok(f.calls.slice(before).every(({ method }) => method === 'GET'));
+});
 test('login selects an account, scopes the saved credential and never prints role tokens', async (t) => {
   const f = await fixture(t);
   const env = { XDG_CONFIG_HOME: f.dir, TICK_BASE_URL: f.env.TICK_BASE_URL };

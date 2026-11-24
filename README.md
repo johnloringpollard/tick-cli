@@ -61,7 +61,7 @@ Check the project and task IDs before posting, especially when names repeat. A t
 | `tick week`, `tick entries list`, `tick entries get ID` | Review your current week or filter entries visible to your role. |
 | `tick report --start-date DATE --end-date DATE` | Total recorded hours across all pages, grouped by day, task, or user. |
 | `tick log DURATION --task-id ID`, `tick entries update ID` | Record time or edit your own unbilled entry. |
-| `tick timers list`, `tick timers get ID`, `tick timers start TASK_ID`, `tick timers update ID` | Inspect timers, start a new timer, or change its task and notes. |
+| `tick timers list`, `tick timers get ID`, `tick timers start [TASK_ID]`, `tick timers update ID` | Inspect timers, start a new timer, or change its task and notes. |
 | `tick timers pause ID`, `tick timers resume ID`, `tick timers save ID` | Pause, resume or turn a timer into a time entry. |
 
 Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A preview with an explicit task ID runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
@@ -82,14 +82,17 @@ Project and task budgets count all recorded entries across people and dates. Run
 ### Timers
 
 ```sh
-tick timers start 24 --notes "Design review"
+tick timers start --notes "Design review"
 tick timers list
 tick timers pause 7
 tick timers resume 7
+tick timers update 7 --task-id 24
 tick timers save 7
 ```
 
-Starting, resuming, or retargeting a timer requires an open task on an open project assigned to the signed-in user. An administrator who can see additional projects must still be assigned to the selected project. You can retarget a timer whose previous project has closed.
+Use `tick timers start` to start tracking before you choose a task, or `tick timers start 24` to start on task 24. `tick timers list` shows all your running and paused timers in the selected account, including those without a task. Assign a task before saving a timer as a time entry.
+
+When you assign a task or resume a timer with a task, the task and project must be open and the project must be assigned to you. An administrator who can see additional projects must still be assigned to the selected project. You can retarget a timer whose previous project has closed.
 
 Use the timer ID returned from `start` for the remaining commands. Starting or resuming a timer pauses the other running timer in that subscription. Pausing keeps the elapsed time. Saving creates an entry dated today in the user’s timezone and removes the timer. Tick's timer response reports accumulated seconds from previous runs and the start of the current run in `last_started_at`.
 
