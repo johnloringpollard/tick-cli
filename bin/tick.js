@@ -322,7 +322,10 @@ async function main() {
     }
     const props = op.inputSchema.properties;
     const opts = { ...globalOptions };
-    for (const k of Object.keys(props)) opts[flagFor(k)] = { type: 'string' };
+    for (const key of Object.keys(props)) {
+      const selector = op.writeScope === 'account:write' && (key.endsWith('_id') || Object.hasOwn(props, key + '_id'));
+      opts[flagFor(key)] = { type: 'string', multiple: selector };
+    }
     const parsed = parse(op.command === first ? rest : rest.slice(1), opts);
     if (parsed.values.help) return console.log(helpFor(op));
     if (parsed.positionals.length > op.positional.length)
@@ -331,7 +334,9 @@ async function main() {
     for (const [name, p] of Object.entries(props)) {
       const i = op.positional.indexOf(name);
       const arg = i < 0 ? undefined : parsed.positionals[i];
-      const flag = parsed.values[flagFor(name)];
+      const option = parsed.values[flagFor(name)];
+      if (Array.isArray(option) && option.length > 1) usage(`Specify ${name} once.`);
+      const flag = Array.isArray(option) ? option[0] : option;
       if (arg !== undefined && flag !== undefined) usage(`Specify ${name} once.`);
       const value = flag ?? arg;
       if (value === undefined) continue;

@@ -558,6 +558,11 @@ test('ambiguous, missing or invalid matches and failed lookups stop before a wri
   const conflict = bad(await f.invoke('tasks', 'add', '--name', 'Review', '--project', 'Launch'));
   assert.equal(conflict.code, 'ambiguous_match');
   assert.match(conflict.message, /Acme #3.*Beta #4.*--client/);
+  for (let i = 0; i < 9; i++)
+    f.candidates.project.push({ id: i + 20, name: 'Launch', client_id: 10 + i, client_name: 'Studio ' + i });
+  const capped = bad(await f.invoke('tasks', 'add', '--name', 'Review', '--project', 'Launch'));
+  assert.match(capped.message, /Showing the first 11 matches/);
+  assert.equal(capped.matches.length, 11);
   f.candidates.owner.push({ id: 8, name: 'Ana Reed', email: 'other@local.test' });
   const owner = bad(await f.call('update_project', { project_id: 5, owner: 'Ana Reed' }));
   assert.match(owner.message, /ana@local.test.*7.*other@local.test.*8.*--owner-id/);
@@ -585,4 +590,32 @@ test('conflicting selectors and qualifiers fail before lookup; named previews bi
   const result = await f.invoke('clients', 'edit', '--client', 'Acme', '--name', 'New', '--dry-run');
   assert.equal(bad(result).code, 'configuration');
   assert.deepEqual(f.calls.map((c) => c.path), ['/42/api/v2/me.json']);
+});
+
+test('repeated management selector flags stop before lookup or write', async (t) => {
+  const f = await fixture(t);
+  for (const args of [
+    ['projects', 'add', '--client', 'Acme', '--client', 'Other', '--owner', 'me', '--name', 'X'],
+    ['projects', 'edit', '5', '--client=Acme', '--client', 'Other'],
+    ['projects', 'edit', '5', '--owner=me', '--owner=Other'],
+    ['projects', 'edit', '5', '--owner-id=7', '--owner-id', '8'],
+    ['tasks', 'edit', '9', '--project=Launch', '--project', 'Other'],
+    ['tasks', 'edit', '9', '--project-id', '5', '--project-id=6'],
+    ['tasks', 'edit', '9', '--project', 'Launch', '--client-id=3', '--client-id=4'],
+    ['tasks', 'edit', '--task-id=9', '--task-id=10', '--billable=true'],
+    ['users', 'edit', '--user-id=7', '--user-id=8', '--admin=false'],
+  ]) assert.equal(bad(await f.invoke(...args)).code, 'invalid_input');
+  assert.equal(f.calls.length, 0);
+  const preview = ok(await f.invoke('clients', 'add', '--name=First', '--name=Last', '--dry-run'));
+  assert.equal(preview.body.client.name, 'Last');
+});
+
+test('owner selectors accept a full name with two 255-character parts', async (t) => {
+  const f = await fixture(t);
+  const name = '𠮷'.repeat(255) + ' ' + 'B'.repeat(255);
+  f.candidates.owner.push({ id: 11, name, email: 'long@local.test' });
+  const preview = ok(await f.invoke('projects', 'edit', '5', '--owner', name, '--dry-run'));
+  assert.deepEqual(preview.body.project, { owner_id: 11 });
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].query.name, name);
 });

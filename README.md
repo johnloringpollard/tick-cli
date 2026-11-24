@@ -64,7 +64,7 @@ Check the project and task IDs before posting, especially when names repeat. A t
 | `tick timers list`, `tick timers get ID`, `tick timers start TASK_ID`, `tick timers update ID` | Inspect timers, start a new timer, or change its task and notes. |
 | `tick timers pause ID`, `tick timers resume ID`, `tick timers save ID` | Pause, resume or turn a timer into a time entry. |
 
-Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A preview with an explicit task ID runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
+Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A `tick log` preview with an explicit `--task-id` runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
 
 ### Manage a subscription
 
