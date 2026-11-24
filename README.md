@@ -76,7 +76,7 @@ tick clients update 3 --name "Acme Studio"
 tick projects create --client-id 3 --owner-id 8 --name "Launch" --budget 40
 tick projects update 16 --billable false
 tick tasks create --project-id 16 --name "Design"
-tick tasks update 24 --due-date 2026-12-15
+tick tasks update 24 --budget 12
 ```
 
 In terminal commands for users, clients, projects, and tasks, `add` is an alias for `create`, and `edit` is an alias for `update`.

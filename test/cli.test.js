@@ -445,7 +445,7 @@ test('terminal and JSON account commands send only supplied fields under the res
     ['user', { first_name: 'Jo', last_name: 'Park', email: 'jo@example.test' }, { admin: false, billable_rate: 0 }],
     ['client', { name: 'Studio' }, { archive: false }],
     ['project', { client_id: 3, owner_id: 7, name: 'Launch' }, { budget: 0, recurring: false }],
-    ['task', { project_id: 5, name: 'Design', budget: 1.5 }, { billable: false, due_date: '2026-12-01' }],
+    ['task', { project_id: 5, name: 'Design', budget: 1.5 }, { billable: false, date_closed: '2026-12-01' }],
   ];
   for (const [resource, create, update] of scenarios) {
     const plural = resource + 's';
@@ -477,9 +477,11 @@ test('account write previews stay offline, and invalid edits and mismatched toke
     ['update_user', { user_id: 12, password: 'unused' }],
     ['update_client', { client_id: 12 }],
     ['update_task', { task_id: 12, budget: -1 }],
+    ['update_task', { task_id: 12, due_date: '2026-12-01' }],
     ['update_project', { project_id: 12, budget: '2' }],
   ]) assert.equal(bad(await f.call(name, data)).code, 'invalid_input');
   assert.equal(bad(await f.invoke('tasks', 'update', '12', '--budget', '')).code, 'invalid_input');
+  assert.equal(bad(await f.invoke('tasks', 'create', '--name', 'Design', '--project-id', '5', '--due-date', '2026-12-01')).code, 'invalid_input');
   assert.equal(f.calls.length, 0);
   assert.equal(bad(await f.invoke('clients', 'update', '12', '--name', 'Studio')).code, 'configuration');
   assert.deepEqual(f.calls.map((call) => call.method), ['GET']);
