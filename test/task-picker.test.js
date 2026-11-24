@@ -11,7 +11,7 @@ const tty = 'data:text/javascript,' + encodeURIComponent(
   'for (const stream of [process.stdin, process.stdout, process.stderr]) stream.isTTY = true;'
 );
 
-async function fixture(t, { oldServer = false, taskCount = 102 } = {}) {
+async function fixture(t, { oldServer = false, taskCount = 102, holdSearch } = {}) {
   const calls = [];
   const tasks = Array.from({ length: taskCount }, (_, i) => ({
     id: i + 1, name: 'Review', client_name: 'Acme', project_name: 'Beta',
@@ -22,6 +22,7 @@ async function fixture(t, { oldServer = false, taskCount = 102 } = {}) {
     let body = '';
     for await (const chunk of req) body += chunk;
     calls.push({ method: req.method, path, query: url.searchParams, body: body && JSON.parse(body) });
+    if (path === 'tasks/search' && holdSearch) return holdSearch();
     let data;
     if (path === 'me') data = { id: 7 };
     if (path === 'users') data = [{ id: 7 }];
@@ -53,7 +54,8 @@ async function fixture(t, { oldServer = false, taskCount = 102 } = {}) {
     child.stdout.on('data', d => stdout += d);
     child.stderr.on('data', d => stderr += d);
     const done = once(child, 'close');
-    child.stdin.end(input);
+    if (typeof input === 'function') await input(child.stdin);
+    else child.stdin.end(input);
     const [code] = await done;
     return { code, stdout: stripVTControlCharacters(stdout), stderr };
   }
@@ -87,6 +89,19 @@ test('Enter, EOF, Ctrl-D, Ctrl-C, and interactive dry-run leave entries untouche
   assert.equal(dry.code, 0, dry.stderr);
   assert.match(dry.stdout, /dry_run: true/);
   assert.match(dry.stdout, /task_id: 2/);
+  assert.ok(calls.every(call => call.method === 'GET'));
+});
+
+test('Ctrl-C cancels a search while its response is pending', { timeout: 5000 }, async t => {
+  const started = Promise.withResolvers();
+  const { calls, run } = await fixture(t, { holdSearch: started.resolve });
+  const result = await run(['log', '45m'], async stdin => {
+    stdin.write('Review\n');
+    await started.promise;
+    stdin.end('\x03');
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stderr, /Cancelled/);
   assert.ok(calls.every(call => call.method === 'GET'));
 });
 
