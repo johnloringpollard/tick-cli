@@ -4,16 +4,13 @@ Use `tick` to review a timesheet, find a client or task, check a budget, record 
 
 ## Install
 
-Install Node.js 22 or later and npm. From a source checkout:
+With Node.js 22 or later and npm installed, run:
 
 ```sh
-git clone https://github.com/tick/tick-cli.git
-cd tick-cli
-npm install --global .
-tick --help
+npm install --global https://github.com/tick/tick-cli/archive/refs/heads/main.tar.gz
 ```
 
-You can also run `node bin/tick.js` from the checkout without installing anything. The CLI has no runtime package dependencies.
+Run `tick --version` to check the installation. Repeat the install command to update to the latest code on `main`. From a source checkout, you can also run `node bin/tick.js` directly. The CLI has no runtime package dependencies.
 
 ## Connect a Tick account
 
@@ -38,9 +35,11 @@ tick login --subscription-id 123
 
 The prompt hides your token. Scripts can pipe it with `--token-stdin`. The existing `tick login --email EMAIL` command also supports a hidden password prompt or `--password-stdin`; use `--subscription-id ID` to select among multiple accounts. Logging out of a legacy account removes the local file. Keep passwords and tokens out of command arguments.
 
-For a script, supply `TICK_SUBSCRIPTION_ID` and `TICK_API_TOKEN` together through its secret store. They override the saved account. Tick identifies regular members through the user list and administrators through their personal timesheet when it contains entries. When an administrator’s week is empty and several people are visible, use browser or email login and unset the token environment overrides before writing personal entries. `TICK_USER_ID` can verify an independently identified account, but supplying an ID alone cannot establish which person owns a token.
+For a script, supply `TICK_SUBSCRIPTION_ID` and `TICK_API_TOKEN` together. They override the saved account. Tick identifies the token owner directly, even when their timesheet is empty. Set `TICK_USER_ID` if the script should stop when the token belongs to another user. On a server without the current-user endpoint, use browser or email login if Tick cannot identify the token owner.
 
 ## First commands
+
+To record time in a terminal, sign in with write access, then run `tick log 45m`. Choose a recent task by number or type a task name to search. Each choice shows its client, project and task. Press Enter at the prompt to cancel. For scripts and JSON output, pass `--task-id` explicitly.
 
 ```sh
 tick tasks recent
@@ -65,7 +64,7 @@ Check the project and task IDs before posting, especially when names repeat. A t
 | `tick timers list`, `tick timers get ID`, `tick timers start TASK_ID`, `tick timers update ID` | Inspect timers, start a new timer, or change its task and notes. |
 | `tick timers pause ID`, `tick timers resume ID`, `tick timers save ID` | Pause, resume or turn a timer into a time entry. |
 
-Use `--help` after a command for its arguments. Write commands accept `--dry-run` to print the proposed method, path and payload without contacting Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
+Use `--help` after a command for its arguments. Write commands accept `--dry-run` to preview the method, path and payload. A preview with an explicit task ID runs offline. Choosing a task interactively reads your task list from Tick. The preview omits fields supplied by Tick or resolved during the live request, such as the logged-in user’s ID. The CLI never automatically retries writes. If the connection drops while recording time, check the timesheet before repeating the command.
 
 ### Reports and budgets
 
