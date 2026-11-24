@@ -15,10 +15,12 @@ Use `tick tools --json` to discover the installed operations and input schemas. 
 
 ## Log time and work with timers
 
-Find candidate tasks with `tick tasks recent --json` or `tick tasks search QUERY --json`. Resolve duplicate task names using the client and project. Use the selected task ID when writing.
+Find candidate tasks with `tick tasks recent --json` or `tick tasks search QUERY --json`. Resolve duplicate task names using the client and project. Use the selected task ID when recording time.
 
 Read “1:30” as a duration only when the context makes that clear. One hour and thirty minutes is `1h30m` or 1.5 hours. For a draft timesheet, keep proposed entries separate from recorded ones. Use work notes for context and ask for missing durations.
 
 For a request to record 45 minutes, the command shape is `tick log 45m --task-id ID --date YYYY-MM-DD --notes TEXT`. Add `--dry-run` to preview it. Return the saved ID and duration after recording. If a write times out, check the entries or timers before repeating it.
+
+Use `tick timers start` when the user wants to start tracking before choosing a task. Add `--notes TEXT` for context. Assign a task with `tick timers update TIMER_ID --task-id TASK_ID` before saving.
 
 Starting a timer pauses another running timer in the same account. Pausing preserves elapsed time. Saving converts the timer into a recorded entry and removes the timer. Keep “pause” and “log” distinct when interpreting “stop.”
